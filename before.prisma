@@ -1,3 +1,5 @@
+// DistribuicaoRecursoStatus has all relations (FK) commented out.
+
 generator client {
     provider        = "prisma-client-js"
     previewFeatures = ["views", "relationJoins"]
@@ -402,6 +404,10 @@ model Pessoa {
     StatusesDistribuicaoQueRemovi    TransferenciaTipoDistribuicaoStatus[] @relation("Removedor")
     StatusesDistribuicaoQueAtualizei TransferenciaTipoDistribuicaoStatus[] @relation("Atualizador")
 
+
+
+
+
     view_atividade_pessoa_responsavel  view_atividade_pessoa_responsavel[]
     view_iniciativa_pessoa_responsavel view_iniciativa_pessoa_responsavel[]
     ViewNotaComOrdemQCriei             ViewNotas[]                          @relation("Criador")
@@ -411,6 +417,10 @@ model Pessoa {
     PdmPerfil             PdmPerfil[] @relation("fk")
     PdmPerfilQueDesativei PdmPerfil[] @relation("Removedor")
     PdmPerfilQueCriei     PdmPerfil[] @relation("Criador")
+
+    ProjetoRegiaoQCriei     ProjetoRegiao[] @relation("Criador")
+    ProjetoRegiaoQAtualizei ProjetoRegiao[] @relation("Atualizador")
+    ProjetoRegiaoQRemovi    ProjetoRegiao[] @relation("Removedor")
 
     @@index([email])
     @@map("pessoa")
@@ -480,10 +490,13 @@ model Orgao {
     tarefas                Tarefa[]
     PlanoAcao              PlanoAcao[]
     projetos_participando  ProjetoOrgaoParticipante[]
-    projetos_geridos       Projeto[]                  @relation("orgao_gestor")
 
     PortifolioOrgao              PortfolioOrgao[]
     orgao_responsavel            Projeto[]                      @relation("orgao_responsavel")
+    orgao_origem                 Projeto[]                      @relation("orgao_origem")
+    orgao_executor               Projeto[]                      @relation("orgao_executor")
+    projetos_geridos             Projeto[]                      @relation("orgao_gestor")
+    projeto_colaborados          Projeto[]                      @relation("orgao_colaborador")
     GrupoPortfolio               GrupoPortfolio[]
     GrupoPortfolioPessoa         GrupoPortfolioPessoa[]
     ProjetoEquipe                ProjetoEquipe[]
@@ -500,6 +513,8 @@ model Orgao {
     ViewNotaComOrdem             ViewNotas[]
     PdmPerfil                    PdmPerfil[]
     Pdm                          Pdm[]
+
+    ViewProjetoMDO               ViewProjetoMDO[]
 
     @@map("orgao")
 }
@@ -751,6 +766,7 @@ model Pdm {
     // index continua existindo para quem é PDM
     // create unique index ix_pdm_uniq_ativo on pdm(ativo) where ativo=true and tipo='PDM';
     PdmPerfil PdmPerfil[]
+    Diretorio Diretorio[]
 
     @@index([ativo])
     @@map("pdm")
@@ -932,6 +948,8 @@ model Tag {
 model ProjetoEtapa {
     id Int @id @default(autoincrement())
 
+    tipo_projeto TipoProjeto @default(PP)
+
     descricao String
 
     criado_por     Int?
@@ -1007,6 +1025,7 @@ model Regiao {
 
     eleicoesComparecimento    EleicaoComparecimento[]
     mandatoRepresentatividade MandatoRepresentatividade[]
+    ProjetoRegiao             ProjetoRegiao[]
 
     @@index([parente_id])
     @@map("regiao")
@@ -1057,6 +1076,9 @@ model Diretorio {
 
     transferencia_id Int?
     transferencia    Transferencia? @relation(fields: [transferencia_id], references: [id])
+
+    pdm_id Int?
+    pdm    Pdm? @relation(fields: [pdm_id], references: [id])
 
     @@index([projeto_id])
     @@index([transferencia_id])
@@ -3019,6 +3041,10 @@ enum ProjetoStatus {
     EmAcompanhamento // Suspenso, fechado
     Suspenso // Volta pra EmAcompanhamento ou Fechado
     Fechado // vai para o SEI o arquivo do relatorio
+    MDO_NaoIniciada
+    MDO_EmAndamento
+    MDO_Concluida
+    MDO_Paralisada
 }
 
 model Portfolio {
@@ -3061,6 +3087,7 @@ model Portfolio {
     ImportacaoLog                ImportacaoOrcamento[]
     PortfolioGrupoPortfolio      PortfolioGrupoPortfolio[]
     projetosCompartilhados       PortfolioProjetoCompartilhado[]
+    ViewProjetoMDO               ViewProjetoMDO[]
 
     @@map("portfolio")
 }
@@ -3168,6 +3195,30 @@ model Projeto {
 
     risco_maximo String?
     qtde_riscos  Int     @default(0)
+
+    mdo_detalhamento             String?
+    mdo_programa_habitacional    String?
+    mdo_observacoes              String?
+    mdo_n_unidades_habitacionais Int?
+    mdo_n_familias_beneficiadas  Int?
+    grupo_tematico_id            Int?
+    mdo_previsao_inauguracao     DateTime?        @db.Date()
+    grupo_tematico               GrupoTematico?   @relation(fields: [grupo_tematico_id], references: [id])
+    tipo_intervencao_id          Int?
+    tipo_intervencao             TipoIntervencao? @relation(fields: [tipo_intervencao_id], references: [id])
+    equipamento_id               Int?
+    equipamento                  Equipamento?     @relation(fields: [equipamento_id], references: [id])
+
+    secretario_colaborador String?
+    orgao_colaborador_id   Int?
+    orgao_colaborador      Orgao?  @relation("orgao_colaborador", fields: [orgao_colaborador_id], references: [id])
+    colaboradores_no_orgao Int[]   @default([])
+
+    orgao_executor_id Int?
+    orgao_executor    Orgao? @relation("orgao_executor", fields: [orgao_executor_id], references: [id])
+
+    orgao_origem_id Int?
+    orgao_origem    Orgao? @relation("orgao_origem", fields: [orgao_origem_id], references: [id])
 
     status         ProjetoStatus
     fase           ProjetoFase
@@ -3290,9 +3341,67 @@ model Projeto {
     gruposTematicos  ProjetoGrupoTematico[]
     tiposIntervencao ProjetoTipoIntervencao[]
     equipamentos     ProjetoEquipamento[]
+    ProjetoRegiao    ProjetoRegiao[]
+
+    vetores_busca  Unsupported("tsvector")? @default(dbgenerated())
+    ViewProjetoMDO ViewProjetoMDO[]
 
     @@index([removido_em])
     @@map("projeto")
+}
+
+view ViewProjetoMDO {
+    id           Int       @id
+    nome         String
+    codigo       String?
+    portfolio_id Int
+    portfolio    Portfolio @relation(fields: [portfolio_id], references: [id])
+
+    projeto Projeto @relation(fields: [id], references: [id])
+
+    grupo_tematico_id   Int
+    grupo_tematico_nome String
+
+    tipo_intervencao_id   Int?
+    tipo_intervencao_nome String?
+
+    equipamento_id   Int?
+    equipamento_nome String?
+
+    orgao_origem_id Int
+    orgao_origem    Orgao @relation(fields: [orgao_origem_id], references: [id])
+
+    regioes String
+
+    status ProjetoStatus
+
+    @@map("view_projeto_mdo")
+}
+
+model ProjetoRegiao {
+    id Int @id @default(autoincrement())
+
+    projeto_id Int
+    projeto    Projeto @relation(fields: [projeto_id], references: [id])
+
+    regiao_id Int
+    regiao    Regiao @relation(fields: [regiao_id], references: [id])
+
+    // criado em, atualizando em, removido em
+    criado_por Int
+    criado_em  DateTime
+    criador    Pessoa   @relation("Criador", fields: [criado_por], references: [id])
+
+    atualizado_por Int?
+    atualizado_em  DateTime?
+    atualizador    Pessoa?   @relation("Atualizador", fields: [atualizado_por], references: [id])
+
+    removido_por Int?
+    removido_em  DateTime?
+    removedor    Pessoa?   @relation("Removedor", fields: [removido_por], references: [id])
+
+    @@index([projeto_id])
+    @@map("projeto_regiao")
 }
 
 model PortfolioProjetoCompartilhado {
@@ -4937,6 +5046,8 @@ model Transferencia {
     valor                          Decimal? @default(0) @db.Decimal(15, 2)
     valor_total                    Decimal? @default(0) @db.Decimal(15, 2)
     valor_contrapartida            Decimal? @default(0) @db.Decimal(15, 2)
+    custeio                        Decimal? @default(0) @db.Decimal(15, 2)
+    investimento                   Decimal? @default(0) @db.Decimal(15, 2)
 
     cargo                ParlamentarCargo?
     ano                  Int?
@@ -5035,6 +5146,8 @@ model DistribuicaoRecurso {
     valor                           Decimal   @default(0) @db.Decimal(15, 2)
     valor_total                     Decimal   @default(0) @db.Decimal(15, 2)
     valor_contrapartida             Decimal   @default(0) @db.Decimal(15, 2)
+    custeio                         Decimal   @default(0) @db.Decimal(15, 2)
+    investimento                    Decimal   @default(0) @db.Decimal(15, 2)
     empenho                         Boolean
     data_empenho                    DateTime? @db.Date()
     programa_orcamentario_estadual  String?
@@ -5069,6 +5182,7 @@ model DistribuicaoRecurso {
 
     registros_sei DistribuicaoRecursoSei[]
     aditamentos   DistribuicaoRecursoAditamento[]
+
 
     @@map("distribuicao_recurso")
 }
@@ -5814,6 +5928,7 @@ model GrupoTematico {
     removedor   Pessoa? @relation("Removedor", fields: [removido_por], references: [id])
 
     projetos ProjetoGrupoTematico[]
+    Projeto  Projeto[]
 
     @@map("grupo_tematico")
 }
@@ -5837,6 +5952,7 @@ model TipoIntervencao {
     removedor   Pessoa? @relation("Removedor", fields: [removido_por], references: [id])
 
     projetos ProjetoTipoIntervencao[]
+    Projeto  Projeto[]
 
     @@map("tipo_intervencao")
 }
@@ -5860,6 +5976,7 @@ model Equipamento {
     removedor   Pessoa? @relation("Removedor", fields: [removido_por], references: [id])
 
     projetos ProjetoEquipamento[]
+    Projeto  Projeto[]
 
     @@map("equipamento")
 }
@@ -5912,6 +6029,9 @@ model DistribuicaoStatusBase {
     nome                             String
     tipo                             DistribuicaoStatusTipo
     valor_distribuicao_contabilizado Boolean
+    permite_novos_registros          Boolean                @default(true)
+
+
 
     @@unique([nome, tipo])
     @@map("distribuicao_status_base")
@@ -5926,6 +6046,7 @@ model TransferenciaTipoDistribuicaoStatus {
     nome                             String
     tipo                             DistribuicaoStatusTipo
     valor_distribuicao_contabilizado Boolean
+    permite_novos_registros          Boolean
 
     criado_por Int
     criado_em  DateTime @default(now()) @db.Timestamptz(6)
@@ -5940,5 +6061,42 @@ model TransferenciaTipoDistribuicaoStatus {
     atualizador Pessoa? @relation("Atualizador", fields: [atualizado_por], references: [id])
     removedor   Pessoa? @relation("Removedor", fields: [removido_por], references: [id])
 
+
+
     @@map("transferencia_tipo_distribuicao_status")
+}
+
+model DistribuicaoRecursoStatus {
+    id Int @id @default(autoincrement())
+
+    distribuicao_id Int
+    //distribuicao    DistribuicaoRecurso @relation(fields: [distribuicao_id], references: [id])
+
+    status_base_id Int?
+    //status_base    DistribuicaoStatusBase? @relation(fields: [status_base_id], references: [id])
+
+    status_id Int?
+    //status    TransferenciaTipoDistribuicaoStatus? @relation(fields: [status_id], references: [id])
+
+    orgao_responsavel_id Int
+    //orgao_responsavel    Orgao @relation(fields: [orgao_responsavel_id], references: [id])
+
+    nome_responsavel String
+    motivo           String
+    data_troca       DateTime @db.Date()
+
+    criado_por Int
+    criado_em  DateTime @default(now()) @db.Timestamptz(6)
+
+    atualizado_por Int?
+    atualizado_em  DateTime? @db.Timestamptz(6)
+
+    removido_por Int?
+    removido_em  DateTime? @db.Timestamptz(6)
+
+    //criador     Pessoa  @relation("Criador", fields: [criado_por], references: [id])
+    //atualizador Pessoa? @relation("Atualizador", fields: [atualizado_por], references: [id])
+    //removedor   Pessoa? @relation("Removedor", fields: [removido_por], references: [id])
+
+    @@map("distribuicao_recurso_status")
 }
